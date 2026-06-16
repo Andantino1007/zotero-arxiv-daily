@@ -19,6 +19,13 @@ llm:
     max_tokens: 12000
   language: Chinese
 
+reranker:
+  api:
+    key: ${oc.env:OPENAI_API_KEY}
+    base_url: https://api.chatanywhere.tech/v1
+    model: text-embedding-ada-002
+    batch_size: 64
+
 source:
   arxiv:
     category:
@@ -33,3 +40,5 @@ source:
 executor:
   debug: ${oc.env:DEBUG,null}
   source: ['arxiv']
+  reranker: api
+  max_paper_num: 20

@@ -13,7 +13,7 @@ email:
 llm:
   api:
     key: ${oc.env:OPENAI_API_KEY}
-    base_url: ${oc.env:OPENAI_API_BASE}
+    base_url: https://api.chatanywhere.tech/v1
   generation_kwargs:
     model: gpt-4o-mini
     max_tokens: 12000

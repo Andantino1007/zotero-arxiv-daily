@@ -23,7 +23,6 @@ jobs:
           RECEIVER: ${{ secrets.RECEIVER }}
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
         run: |
           echo "Use repository config: config/custom.yaml"
           uv run src/zotero_arxiv_daily/main.py

@@ -36,6 +36,7 @@ source:
       - math.NA
       - cs.CE
     include_cross_list: true
+    extract_full_text: false
 
 executor:
   debug: ${oc.env:DEBUG,null}

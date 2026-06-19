@@ -120,6 +120,7 @@ class ArxivRetriever(BaseRetriever):
             raise ValueError("category must be specified for arxiv.")
         self.extract_full_text = self.config.source.arxiv.get("extract_full_text", True)
         self.keywords = _normalized_keywords(self.config.source.arxiv.get("keywords", []))
+        self.required_keywords = _normalized_keywords(self.config.source.arxiv.get("required_keywords", []))
         self.exclude_keywords = _normalized_keywords(self.config.source.arxiv.get("exclude_keywords", []))
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
@@ -151,7 +152,7 @@ class ArxivRetriever(BaseRetriever):
                     batch = list(client.results(search))
                     bar.update(len(batch))
                     filtered_batch = [paper for paper in batch if self._matches_keywords(paper)]
-                    if self.keywords or self.exclude_keywords:
+                    if self.keywords or self.required_keywords or self.exclude_keywords:
                         logger.info(
                             f"Keyword filter kept {len(filtered_batch)}/{len(batch)} arXiv papers "
                             f"in batch {i // 20}"
@@ -175,9 +176,11 @@ class ArxivRetriever(BaseRetriever):
         searchable_text = self._searchable_text(raw_paper)
         if self.exclude_keywords and any(keyword in searchable_text for keyword in self.exclude_keywords):
             return False
-        if not self.keywords:
-            return True
-        return any(keyword in searchable_text for keyword in self.keywords)
+        if self.keywords and not any(keyword in searchable_text for keyword in self.keywords):
+            return False
+        if self.required_keywords and not any(keyword in searchable_text for keyword in self.required_keywords):
+            return False
+        return True
 
     def _searchable_text(self, raw_paper: ArxivResult) -> str:
         categories = " ".join(getattr(raw_paper, "categories", []) or [])

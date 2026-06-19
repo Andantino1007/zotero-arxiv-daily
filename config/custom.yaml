@@ -35,8 +35,68 @@ source:
       - cond-mat.soft
       - math.NA
       - cs.CE
+      - cs.LG
+      - cs.AI
     include_cross_list: true
     extract_full_text: false
+    keywords:
+      # Neural operators / operator learning for solid and multiphysics mechanics
+      - neural operator
+      - operator learning
+      - Fourier neural operator
+      - DeepONet
+      - finite element neural operator
+      - finite element-guided
+      - physics-informed operator learning
+      - thermomechanical operator learning
+      - thermo-mechanical operator learning
+      - boundary-to-domain mapping
+
+      # LLM and AI-agent workflows for finite element / structural analysis
+      - large language model
+      - LLM
+      - AI agent
+      - AI-agent
+      - multi-agent
+      - finite element analysis
+      - automated structural analysis
+      - AbaqusAgent
+      - Abaqus
+      - OpenSees
+      - OpenSeesPy
+      - structural modeling
+
+      # Generative design for microstructures, metamaterials, and mechanical properties
+      - diffusion model
+      - generative model
+      - inverse design
+      - mechanical metamaterial
+      - metamaterial design
+      - microstructure generation
+      - microstructure design
+      - mechanical properties
+      - stress-strain
+      - signed distance function
+      - property conditioning
+
+      # Physics-informed neural networks for solid, fracture, and inverse mechanics
+      - physics-informed neural network
+      - physics-informed machine learning
+      - PINN
+      - Finite-PINN
+      - fracture mechanics
+      - inverse problem
+      - Kolosov-Muskhelishvili
+      - extended physics-informed neural network
+    exclude_keywords:
+      - interatomic potential
+      - atomic potential
+      - atomistic potential
+      - universal interatomic potential
+      - machine learning interatomic potential
+      - neural network potential
+      - MLIP
+      - ML-IAP
 
 executor:
   debug: ${oc.env:DEBUG,null}

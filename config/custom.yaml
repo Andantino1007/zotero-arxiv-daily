@@ -40,54 +40,64 @@ source:
     include_cross_list: true
     extract_full_text: false
     keywords:
-      # Neural operators / operator learning for solid and multiphysics mechanics
+      # Neural operators / operator learning
       - neural operator
       - operator learning
       - Fourier neural operator
       - DeepONet
       - finite element neural operator
-      - finite element-guided
       - physics-informed operator learning
-      - thermomechanical operator learning
-      - thermo-mechanical operator learning
-      - boundary-to-domain mapping
 
-      # LLM and AI-agent workflows for finite element / structural analysis
+      # LLM and AI-agent workflows
       - large language model
       - LLM
       - AI agent
       - AI-agent
       - multi-agent
-      - finite element analysis
-      - automated structural analysis
       - AbaqusAgent
-      - Abaqus
-      - OpenSees
-      - OpenSeesPy
-      - structural modeling
+      - OpenSeesPy agent
+      - automated structural analysis
 
-      # Generative design for microstructures, metamaterials, and mechanical properties
+      # Generative design
       - diffusion model
       - generative model
       - inverse design
-      - mechanical metamaterial
-      - metamaterial design
-      - microstructure generation
-      - microstructure design
-      - mechanical properties
-      - stress-strain
-      - signed distance function
       - property conditioning
+      - conditional generation
 
-      # Physics-informed neural networks for solid, fracture, and inverse mechanics
+      # Physics-informed learning
       - physics-informed neural network
       - physics-informed machine learning
       - PINN
       - Finite-PINN
-      - fracture mechanics
-      - inverse problem
       - Kolosov-Muskhelishvili
       - extended physics-informed neural network
+    required_keywords:
+      # Keep broad AI categories tied to mechanics, not generic AI papers.
+      - solid mechanics
+      - computational mechanics
+      - continuum mechanics
+      - finite element
+      - finite element analysis
+      - structural analysis
+      - structural modeling
+      - elasticity
+      - hyperelasticity
+      - elastodynamics
+      - fracture mechanics
+      - crack propagation
+      - thermomechanical
+      - thermo-mechanical
+      - multiphysics
+      - metamaterial
+      - mechanical metamaterial
+      - microstructure
+      - mechanical properties
+      - stress-strain
+      - boundary-to-domain
+      - Abaqus
+      - OpenSees
+      - OpenSeesPy
     exclude_keywords:
       - interatomic potential
       - atomic potential

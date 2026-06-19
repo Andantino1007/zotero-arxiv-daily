@@ -106,6 +106,12 @@ def _extract_text_from_tar_worker(source_url: str, paper_id: str, paper_title: s
         return file_contents["all"]
 
 
+def _normalized_keywords(values: Any) -> list[str]:
+    if values is None:
+        return []
+    return [str(value).strip().lower() for value in values if str(value).strip()]
+
+
 @register_retriever("arxiv")
 class ArxivRetriever(BaseRetriever):
     def __init__(self, config):
@@ -113,6 +119,8 @@ class ArxivRetriever(BaseRetriever):
         if self.config.source.arxiv.category is None:
             raise ValueError("category must be specified for arxiv.")
         self.extract_full_text = self.config.source.arxiv.get("extract_full_text", True)
+        self.keywords = _normalized_keywords(self.config.source.arxiv.get("keywords", []))
+        self.exclude_keywords = _normalized_keywords(self.config.source.arxiv.get("exclude_keywords", []))
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
         client = arxiv.Client(num_retries=10, delay_seconds=10)
@@ -142,7 +150,13 @@ class ArxivRetriever(BaseRetriever):
                 try:
                     batch = list(client.results(search))
                     bar.update(len(batch))
-                    raw_papers.extend(batch)
+                    filtered_batch = [paper for paper in batch if self._matches_keywords(paper)]
+                    if self.keywords or self.exclude_keywords:
+                        logger.info(
+                            f"Keyword filter kept {len(filtered_batch)}/{len(batch)} arXiv papers "
+                            f"in batch {i // 20}"
+                        )
+                    raw_papers.extend(filtered_batch)
                     break
                 except arxiv.HTTPError as exc:
                     if exc.status == 429 and attempt < max_batch_retries - 1:
@@ -156,6 +170,26 @@ class ArxivRetriever(BaseRetriever):
         bar.close()
 
         return raw_papers
+
+    def _matches_keywords(self, raw_paper: ArxivResult) -> bool:
+        searchable_text = self._searchable_text(raw_paper)
+        if self.exclude_keywords and any(keyword in searchable_text for keyword in self.exclude_keywords):
+            return False
+        if not self.keywords:
+            return True
+        return any(keyword in searchable_text for keyword in self.keywords)
+
+    def _searchable_text(self, raw_paper: ArxivResult) -> str:
+        categories = " ".join(getattr(raw_paper, "categories", []) or [])
+        primary_category = getattr(raw_paper, "primary_category", "") or ""
+        return "\n".join(
+            [
+                raw_paper.title or "",
+                raw_paper.summary or "",
+                primary_category,
+                categories,
+            ]
+        ).lower()
 
     def convert_to_paper(self, raw_paper: ArxivResult) -> Paper:
         title = raw_paper.title

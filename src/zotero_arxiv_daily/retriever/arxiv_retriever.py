@@ -112,6 +112,10 @@ def _normalized_keywords(values: Any) -> list[str]:
     return [str(value).strip().lower() for value in values if str(value).strip()]
 
 
+def _contains_any(text: str, keywords: list[str]) -> bool:
+    return any(keyword in text for keyword in keywords)
+
+
 @register_retriever("arxiv")
 class ArxivRetriever(BaseRetriever):
     def __init__(self, config):
@@ -119,6 +123,7 @@ class ArxivRetriever(BaseRetriever):
         if self.config.source.arxiv.category is None:
             raise ValueError("category must be specified for arxiv.")
         self.extract_full_text = self.config.source.arxiv.get("extract_full_text", True)
+        self.strong_keywords = _normalized_keywords(self.config.source.arxiv.get("strong_keywords", []))
         self.keywords = _normalized_keywords(self.config.source.arxiv.get("keywords", []))
         self.required_keywords = _normalized_keywords(self.config.source.arxiv.get("required_keywords", []))
         self.exclude_keywords = _normalized_keywords(self.config.source.arxiv.get("exclude_keywords", []))
@@ -152,7 +157,7 @@ class ArxivRetriever(BaseRetriever):
                     batch = list(client.results(search))
                     bar.update(len(batch))
                     filtered_batch = [paper for paper in batch if self._matches_keywords(paper)]
-                    if self.keywords or self.required_keywords or self.exclude_keywords:
+                    if self.strong_keywords or self.keywords or self.required_keywords or self.exclude_keywords:
                         logger.info(
                             f"Keyword filter kept {len(filtered_batch)}/{len(batch)} arXiv papers "
                             f"in batch {i // 20}"
@@ -174,13 +179,20 @@ class ArxivRetriever(BaseRetriever):
 
     def _matches_keywords(self, raw_paper: ArxivResult) -> bool:
         searchable_text = self._searchable_text(raw_paper)
-        if self.exclude_keywords and any(keyword in searchable_text for keyword in self.exclude_keywords):
+        if self.exclude_keywords and _contains_any(searchable_text, self.exclude_keywords):
             return False
-        if self.keywords and not any(keyword in searchable_text for keyword in self.keywords):
+
+        # Strong keywords are already targeted to SciML/PDE methods that transfer well to mechanics.
+        if self.strong_keywords and _contains_any(searchable_text, self.strong_keywords):
+            return True
+
+        # Broader AI terms still need a mechanics anchor to avoid generic LLM/diffusion papers.
+        if self.keywords and not _contains_any(searchable_text, self.keywords):
             return False
-        if self.required_keywords and not any(keyword in searchable_text for keyword in self.required_keywords):
+        if self.required_keywords and not _contains_any(searchable_text, self.required_keywords):
             return False
-        return True
+
+        return bool(self.keywords or self.required_keywords) or not self.strong_keywords
 
     def _searchable_text(self, raw_paper: ArxivResult) -> str:
         categories = " ".join(getattr(raw_paper, "categories", []) or [])

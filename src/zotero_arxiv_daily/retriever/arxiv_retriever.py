@@ -188,6 +188,7 @@ class ArxivRetriever(BaseRetriever):
 
         before_count = len(raw_papers)
         seen_ids = {paper.entry_id for paper in raw_papers}
+        fallback_papers = sorted(fallback_papers, key=self._fallback_score, reverse=True)
         for paper in fallback_papers:
             if paper.entry_id in seen_ids:
                 continue
@@ -229,11 +230,26 @@ class ArxivRetriever(BaseRetriever):
         if not self.fallback_categories:
             return True
 
+        paper_categories = self._paper_categories(raw_paper)
+        return any(category in paper_categories for category in self.fallback_categories)
+
+    def _fallback_score(self, raw_paper: ArxivResult) -> int:
+        searchable_text = self._searchable_text(raw_paper)
+        score = 0
+        score += 30 * sum(1 for keyword in self.strong_keywords if keyword in searchable_text)
+        score += 20 * sum(1 for keyword in self.required_keywords if keyword in searchable_text)
+        score += 8 * sum(1 for keyword in self.keywords if keyword in searchable_text)
+        paper_categories = self._paper_categories(raw_paper)
+        if any(category in paper_categories for category in self.fallback_categories):
+            score += 1
+        return score
+
+    def _paper_categories(self, raw_paper: ArxivResult) -> set[str]:
         paper_categories = {category.lower() for category in (getattr(raw_paper, "categories", []) or [])}
         primary_category = (getattr(raw_paper, "primary_category", "") or "").lower()
         if primary_category:
             paper_categories.add(primary_category)
-        return any(category in paper_categories for category in self.fallback_categories)
+        return paper_categories
 
     def _searchable_text(self, raw_paper: ArxivResult) -> str:
         categories = " ".join(getattr(raw_paper, "categories", []) or [])

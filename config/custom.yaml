@@ -40,25 +40,26 @@ source:
     include_cross_list: true
     extract_full_text: false
     strong_keywords:
-      # SciML / PDE methods that are usually useful for mechanics even when the abstract is not mechanics-specific.
+      # Specific SciML/PDE methods that transfer well to solid mechanics.
       - neural operator
-      - operator learning
       - Fourier neural operator
       - DeepONet
-      - physics-informed neural network
-      - physics-informed machine learning
-      - PINN
-      - scientific machine learning
+      - finite element neural operator
+      - physics-informed operator learning
+      - physics-informed surrogate
       - differentiable simulation
       - differentiable physics
       - neural PDE
       - PDE surrogate
       - surrogate model for PDE
-      - reduced-order neural
     keywords:
       # Broad AI terms below still need one mechanics anchor from required_keywords.
-      - finite element neural operator
-      - physics-informed operator learning
+      - operator learning
+      - physics-informed neural network
+      - physics-informed machine learning
+      - PINN
+      - scientific machine learning
+      - reduced-order neural
       - large language model
       - LLM
       - AI agent
@@ -96,6 +97,8 @@ source:
       - mechanical properties
       - stress-strain
       - boundary-to-domain
+      - elastic displacement
+      - linear elastic
       - Abaqus
       - OpenSees
       - OpenSeesPy
@@ -108,6 +111,14 @@ source:
       - neural network potential
       - MLIP
       - ML-IAP
+      - fluid flow
+      - Navier-Stokes
+      - turbulence
+      - quantum
+      - finance
+      - financial
+      - crypto
+      - liquidity
 
 executor:
   debug: ${oc.env:DEBUG,null}

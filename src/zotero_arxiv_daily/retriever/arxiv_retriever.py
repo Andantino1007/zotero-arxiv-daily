@@ -127,6 +127,8 @@ class ArxivRetriever(BaseRetriever):
         self.keywords = _normalized_keywords(self.config.source.arxiv.get("keywords", []))
         self.required_keywords = _normalized_keywords(self.config.source.arxiv.get("required_keywords", []))
         self.exclude_keywords = _normalized_keywords(self.config.source.arxiv.get("exclude_keywords", []))
+        self.fallback_categories = _normalized_keywords(self.config.source.arxiv.get("fallback_categories", []))
+        self.min_paper_num = int(self.config.source.arxiv.get("min_paper_num", 0) or 0)
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
         client = arxiv.Client(num_retries=10, delay_seconds=10)
@@ -137,6 +139,7 @@ class ArxivRetriever(BaseRetriever):
         if 'Feed error for query' in feed.feed.title:
             raise Exception(f"Invalid ARXIV_QUERY: {query}.")
         raw_papers = []
+        fallback_papers = []
         allowed_announce_types = {"new", "cross"} if include_cross_list else {"new"}
         all_paper_ids = [
             i.id.removeprefix("oai:arXiv.org:")
@@ -157,6 +160,7 @@ class ArxivRetriever(BaseRetriever):
                     batch = list(client.results(search))
                     bar.update(len(batch))
                     filtered_batch = [paper for paper in batch if self._matches_keywords(paper)]
+                    fallback_papers.extend([paper for paper in batch if self._matches_fallback_candidate(paper)])
                     if self.strong_keywords or self.keywords or self.required_keywords or self.exclude_keywords:
                         logger.info(
                             f"Keyword filter kept {len(filtered_batch)}/{len(batch)} arXiv papers "
@@ -175,6 +179,28 @@ class ArxivRetriever(BaseRetriever):
                 sleep(3)
         bar.close()
 
+        raw_papers = self._expand_sparse_results(raw_papers, fallback_papers)
+        return raw_papers
+
+    def _expand_sparse_results(self, raw_papers: list[ArxivResult], fallback_papers: list[ArxivResult]) -> list[ArxivResult]:
+        if self.min_paper_num <= 0 or len(raw_papers) >= self.min_paper_num:
+            return raw_papers
+
+        before_count = len(raw_papers)
+        seen_ids = {paper.entry_id for paper in raw_papers}
+        for paper in fallback_papers:
+            if paper.entry_id in seen_ids:
+                continue
+            raw_papers.append(paper)
+            seen_ids.add(paper.entry_id)
+            if len(raw_papers) >= self.min_paper_num:
+                break
+
+        if len(raw_papers) > before_count:
+            logger.info(
+                f"Expanded sparse keyword results from {before_count} to {len(raw_papers)} "
+                f"papers using fallback categories before reranking"
+            )
         return raw_papers
 
     def _matches_keywords(self, raw_paper: ArxivResult) -> bool:
@@ -193,6 +219,21 @@ class ArxivRetriever(BaseRetriever):
             return False
 
         return bool(self.keywords or self.required_keywords) or not self.strong_keywords
+
+    def _matches_fallback_candidate(self, raw_paper: ArxivResult) -> bool:
+        searchable_text = self._searchable_text(raw_paper)
+        if self.exclude_keywords and _contains_any(searchable_text, self.exclude_keywords):
+            return False
+        if self.required_keywords and _contains_any(searchable_text, self.required_keywords):
+            return True
+        if not self.fallback_categories:
+            return True
+
+        paper_categories = {category.lower() for category in (getattr(raw_paper, "categories", []) or [])}
+        primary_category = (getattr(raw_paper, "primary_category", "") or "").lower()
+        if primary_category:
+            paper_categories.add(primary_category)
+        return any(category in paper_categories for category in self.fallback_categories)
 
     def _searchable_text(self, raw_paper: ArxivResult) -> str:
         categories = " ".join(getattr(raw_paper, "categories", []) or [])

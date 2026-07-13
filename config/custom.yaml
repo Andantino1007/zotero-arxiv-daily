@@ -132,4 +132,4 @@ executor:
   debug: ${oc.env:DEBUG,null}
   source: ['arxiv']
   reranker: api
-  max_paper_num: 20
+  max_paper_num: 5

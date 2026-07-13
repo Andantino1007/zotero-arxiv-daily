@@ -39,16 +39,26 @@ source:
       - cs.AI
     include_cross_list: true
     extract_full_text: false
-    keywords:
-      # Neural operators / operator learning
+    strong_keywords:
+      # SciML / PDE methods that are usually useful for mechanics even when the abstract is not mechanics-specific.
       - neural operator
       - operator learning
       - Fourier neural operator
       - DeepONet
+      - physics-informed neural network
+      - physics-informed machine learning
+      - PINN
+      - scientific machine learning
+      - differentiable simulation
+      - differentiable physics
+      - neural PDE
+      - PDE surrogate
+      - surrogate model for PDE
+      - reduced-order neural
+    keywords:
+      # Broad AI terms below still need one mechanics anchor from required_keywords.
       - finite element neural operator
       - physics-informed operator learning
-
-      # LLM and AI-agent workflows
       - large language model
       - LLM
       - AI agent
@@ -57,23 +67,14 @@ source:
       - AbaqusAgent
       - OpenSeesPy agent
       - automated structural analysis
-
-      # Generative design
       - diffusion model
       - generative model
       - inverse design
       - property conditioning
       - conditional generation
-
-      # Physics-informed learning
-      - physics-informed neural network
-      - physics-informed machine learning
-      - PINN
-      - Finite-PINN
-      - Kolosov-Muskhelishvili
-      - extended physics-informed neural network
+      - foundation model
     required_keywords:
-      # Keep broad AI categories tied to mechanics, not generic AI papers.
+      # Mechanics anchors for broad AI terms.
       - solid mechanics
       - computational mechanics
       - continuum mechanics

@@ -39,6 +39,14 @@ source:
       - cs.AI
     include_cross_list: true
     extract_full_text: false
+    min_paper_num: 30
+    fallback_categories:
+      - physics.comp-ph
+      - physics.app-ph
+      - cond-mat.mtrl-sci
+      - cond-mat.soft
+      - math.NA
+      - cs.CE
     strong_keywords:
       # Specific SciML/PDE methods that transfer well to solid mechanics.
       - neural operator

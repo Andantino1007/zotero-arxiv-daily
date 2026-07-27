@@ -39,7 +39,7 @@ source:
       - cs.AI
     include_cross_list: true
     extract_full_text: false
-    min_paper_num: 30
+    min_paper_num: 20
     fallback_categories:
       - physics.comp-ph
       - physics.app-ph
@@ -47,6 +47,20 @@ source:
       - cond-mat.soft
       - math.NA
       - cs.CE
+    priority_keywords:
+      # Give multi-agent FEM / structural-analysis papers an explicit boost.
+      - multi-agent
+      - AI agent
+      - AI-agent
+      - LLM agent
+      - agentic
+      - AbaqusAgent
+      - OpenSeesPy agent
+      - automated structural analysis
+      - finite element agent
+      - finite element analysis agent
+      - structural analysis agent
+      - structural modeling agent
     strong_keywords:
       # Specific SciML/PDE methods that transfer well to solid mechanics.
       - neural operator
@@ -83,7 +97,7 @@ source:
       - conditional generation
       - foundation model
     required_keywords:
-      # Mechanics anchors for broad AI terms.
+      # Mechanics anchors for broad AI terms and all fallback papers.
       - solid mechanics
       - computational mechanics
       - continuum mechanics

@@ -4,6 +4,7 @@ import time
 from types import SimpleNamespace
 
 import feedparser
+from omegaconf import OmegaConf
 
 from zotero_arxiv_daily.retriever.arxiv_retriever import ArxivRetriever, _run_with_hard_timeout
 import zotero_arxiv_daily.retriever.arxiv_retriever as arxiv_retriever
@@ -20,6 +21,13 @@ def _raise_runtime_error() -> None:
 
 def test_arxiv_retriever(config, mock_feedparser, monkeypatch):
     monkeypatch.setattr("zotero_arxiv_daily.retriever.base.sleep", lambda _: None)
+    # This retrieval test must not inherit the user's production keyword filters.
+    source = config.source.arxiv
+    OmegaConf.set_struct(source, False)
+    for key in ("priority_keywords", "strong_keywords", "keywords", "required_keywords", "exclude_keywords", "fallback_categories"):
+        source[key] = []
+    source.min_paper_num = 0
+    source.include_cross_list = False
 
     # The RSS fixture gives us paper IDs.  After feedparser, the code calls
     # arxiv.Client().results(search) which makes real HTTP requests.  We mock

@@ -4,6 +4,9 @@ from arxiv import Result as ArxivResult
 from ..protocol import Paper
 from ..utils import extract_markdown_from_pdf, extract_tex_code_from_tar
 from tempfile import TemporaryDirectory
+from calendar import timegm
+from datetime import datetime, timezone
+from html.parser import HTMLParser
 import feedparser
 from tqdm import tqdm
 import multiprocessing
@@ -116,6 +119,78 @@ def _contains_any(text: str, keywords: list[str]) -> bool:
     return any(keyword in text for keyword in keywords)
 
 
+class _RSSPlainText(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+
+def _result_from_rss(entry: Any) -> ArxivResult:
+    paper_id = entry.get("id", "").removeprefix("oai:arXiv.org:")
+    title = entry.get("title", "").strip()
+    summary = entry.get("summary", "").strip()
+    if entry.get("summary_detail", {}).get("type") in {"text/html", "application/xhtml+xml"}:
+        parser = _RSSPlainText()
+        parser.feed(summary)
+        summary = " ".join(parser.parts).strip()
+    # RSS summaries prepend the identifier and announcement type to the abstract.
+    if summary.startswith("arXiv:") and "Abstract:" in summary:
+        summary = summary.partition("Abstract:")[2].strip()
+    if not paper_id or not title or not summary:
+        raise ValueError(f"Incomplete arXiv RSS metadata for {paper_id or 'unknown paper'}")
+    categories = [tag["term"] for tag in entry.get("tags", []) if tag.get("term")]
+    authors = [
+        ArxivResult.Author(name.strip())
+        for author in entry.get("authors", [])
+        for name in author.get("name", "").split(",")
+        if name.strip()
+    ]
+    dates = {
+        field: datetime.fromtimestamp(timegm(entry[f"{field}_parsed"]), timezone.utc)
+        for field in ("published", "updated")
+        if entry.get(f"{field}_parsed")
+    }
+    return ArxivResult(
+        entry_id=f"https://arxiv.org/abs/{paper_id}",
+        title=title,
+        summary=summary,
+        authors=authors,
+        categories=categories,
+        primary_category=categories[0] if categories else "",
+        links=[ArxivResult.Link(
+            href=f"https://arxiv.org/pdf/{paper_id}", title="pdf",
+            rel="related", content_type="application/pdf",
+        )],
+        **dates,
+    )
+
+
+def _retrieve_api_batch(client: arxiv.Client, paper_ids: list[str]) -> list[ArxivResult] | None:
+    search = arxiv.Search(id_list=paper_ids, max_results=len(paper_ids))
+    for attempt in range(3):
+        try:
+            batch = list(client.results(search))
+            if len(batch) != len(paper_ids):
+                logger.warning(
+                    f"arXiv API returned {len(batch)}/{len(paper_ids)} papers; using RSS metadata"
+                )
+                return None
+            return batch
+        except (arxiv.HTTPError, arxiv.UnexpectedEmptyPageError, requests.exceptions.RequestException) as exc:
+            status = exc.status if isinstance(exc, arxiv.HTTPError) else None
+            if status is not None and status not in {406, 429} and not 500 <= status < 600:
+                raise
+            logger.warning(f"arXiv API batch failed (attempt {attempt + 1}/3): {exc}")
+            # A rejected request should not be repeated for every batch in the feed.
+            if status == 406 or attempt == 2:
+                return None
+            sleep(30 * (2 ** attempt))
+    return None
+
+
 @register_retriever("arxiv")
 class ArxivRetriever(BaseRetriever):
     def __init__(self, config):
@@ -132,53 +207,56 @@ class ArxivRetriever(BaseRetriever):
         self.min_paper_num = int(self.config.source.arxiv.get("min_paper_num", 0) or 0)
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
-        client = arxiv.Client(num_retries=10, delay_seconds=10)
+        # Retry here only, rather than multiplying client retries by batch retries.
+        client = arxiv.Client(num_retries=0, delay_seconds=10)
         query = '+'.join(self.config.source.arxiv.category)
         include_cross_list = self.config.source.arxiv.get("include_cross_list", False)
         # Get the latest paper from arxiv rss feed
         feed = feedparser.parse(f"https://rss.arxiv.org/atom/{query}")
+        if feed.get("status", 200) >= 400 or feed.get("bozo") or not feed.feed.get("title"):
+            raise RuntimeError(f"Failed to read arXiv RSS feed for {query}")
         if 'Feed error for query' in feed.feed.title:
             raise Exception(f"Invalid ARXIV_QUERY: {query}.")
         raw_papers = []
         fallback_papers = []
         allowed_announce_types = {"new", "cross"} if include_cross_list else {"new"}
-        all_paper_ids = [
-            i.id.removeprefix("oai:arXiv.org:")
+        entries = [
+            i
             for i in feed.entries
             if i.get("arxiv_announce_type", "new") in allowed_announce_types
         ]
         if self.config.executor.debug:
-            all_paper_ids = all_paper_ids[:10]
+            entries = entries[:10]
 
         # Get full information of each paper from arxiv api
-        bar = tqdm(total=len(all_paper_ids))
-        max_batch_retries = 5
-        batch_retry_delay = 30
-        for i in range(0, len(all_paper_ids), 20):
-            search = arxiv.Search(id_list=all_paper_ids[i:i + 20])
-            for attempt in range(max_batch_retries):
-                try:
-                    batch = list(client.results(search))
-                    bar.update(len(batch))
-                    filtered_batch = [paper for paper in batch if self._matches_keywords(paper)]
-                    fallback_papers.extend([paper for paper in batch if self._matches_fallback_candidate(paper)])
-                    if self.priority_keywords or self.strong_keywords or self.keywords or self.required_keywords or self.exclude_keywords:
-                        logger.info(
-                            f"Keyword filter kept {len(filtered_batch)}/{len(batch)} arXiv papers "
-                            f"in batch {i // 20}"
+        use_rss = False
+        with tqdm(total=len(entries)) as bar:
+            for i in range(0, len(entries), 20):
+                batch_entries = entries[i:i + 20]
+                batch = None
+                if not use_rss:
+                    batch = _retrieve_api_batch(
+                        client, [entry.id.removeprefix("oai:arXiv.org:") for entry in batch_entries]
+                    )
+                    if batch is None:
+                        use_rss = True
+                        logger.warning(
+                            f"Using arXiv RSS metadata for the remaining {len(entries) - i} papers "
+                            "because the API is unavailable"
                         )
-                    raw_papers.extend(filtered_batch)
-                    break
-                except arxiv.HTTPError as exc:
-                    if exc.status == 429 and attempt < max_batch_retries - 1:
-                        wait = batch_retry_delay * (attempt + 1)
-                        logger.warning(f"arXiv API 429 on batch {i // 20}, retry {attempt + 1}/{max_batch_retries} in {wait}s")
-                        sleep(wait)
-                    else:
-                        raise
-            if i + 20 < len(all_paper_ids):
-                sleep(3)
-        bar.close()
+                if use_rss:
+                    batch = [_result_from_rss(entry) for entry in batch_entries]
+                bar.update(len(batch))
+                filtered_batch = [paper for paper in batch if self._matches_keywords(paper)]
+                fallback_papers.extend([paper for paper in batch if self._matches_fallback_candidate(paper)])
+                if self.priority_keywords or self.strong_keywords or self.keywords or self.required_keywords or self.exclude_keywords:
+                    logger.info(
+                        f"Keyword filter kept {len(filtered_batch)}/{len(batch)} arXiv papers "
+                        f"in batch {i // 20}"
+                    )
+                raw_papers.extend(filtered_batch)
+                if not use_rss and i + 20 < len(entries):
+                    sleep(3)
 
         raw_papers = self._expand_sparse_results(raw_papers, fallback_papers)
         return raw_papers
